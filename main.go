@@ -1,42 +1,52 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
+const connectionString = "postgres://postgres:root@localhost:5433/postgres?sslmode=disable"
+
 func getDump(w http.ResponseWriter, r *http.Request) {
-	connStr := "postgres://postgres:root@localhost:5432/postgres?sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+	file, _, err := r.FormFile("dump")
+	service := r.FormValue("service")
 
 	if err != nil {
 		log.Fatal(err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	// age := 21
-	// db.Query("CREATE DATABASE users")
+	fmt.Println("Service:" + service)
 
-	file, err := os.ReadFile("../test_dump.sql")
+	buf := bytes.NewBuffer(nil)
+
+	// Copy the contents of the file to the form field
+	if _, err := io.Copy(buf, file); err != nil {
+		log.Fatal(err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	defer file.Close()
+
+	dump := buf.String()
+
+	db, err := sql.Open("postgres", connectionString)
 
 	if err != nil {
 		log.Fatal(err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	dump := string(file)
+	fmt.Println(dump)
 
-	fmt.Println((dump))
-
-	row, err := db.Query(dump)
-
-	// row, err := db.Query("SELECT name FROM users WHERE age = $1", age)
+	row, err := db.Exec(dump)
 
 	if err != nil {
 		log.Fatal(err)
@@ -45,7 +55,6 @@ func getDump(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(row)
 
-	// fmt.Println(row)
 	w.WriteHeader(http.StatusOK)
 }
 
